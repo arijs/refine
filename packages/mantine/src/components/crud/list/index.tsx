@@ -77,7 +77,7 @@ export const List: React.FC<ListProps> = (props) => {
                         <Title order={3} transform="capitalize">
                             {translate(
                                 `${resource.name}.titles.list`,
-                                userFriendlyResourceName(
+                                resource.labelList ?? userFriendlyResourceName(
                                     resource.label ?? resource.name,
                                     "plural",
                                 ),

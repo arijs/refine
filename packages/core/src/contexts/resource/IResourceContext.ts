@@ -52,6 +52,7 @@ export interface IResourceComponents {
 export interface IResourceItem extends IResourceComponents {
     name: string;
     label?: string;
+    labelList?: string;
     route?: string;
     icon?: ReactNode;
     canCreate?: boolean;

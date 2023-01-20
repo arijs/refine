@@ -36,6 +36,14 @@ type GetAppwriteSortingType = {
     (sorts?: CrudSorting): string[];
 };
 
+type DataProviderOptions = {
+    databaseId: string
+    renameCol_$Id?: string | undefined
+    resourceOptions?: (resourceName: string) => {
+        uniqueKeyAsPrimaryKey?: string | undefined
+    }
+}
+
 const generateFilter = (filter: CrudFilter) => {
     switch (filter.operator) {
         case "eq":
@@ -103,13 +111,44 @@ export const getAppwritePagination = (pagination: Pagination) => {
     return [Query.offset((current - 1) * pageSize), Query.limit(pageSize)];
 };
 
+const resourceOptionsDefault: DataProviderOptions['resourceOptions'] = () => ({
+    uniqueKeyAsPrimaryKey: undefined,
+})
+
 export const dataProvider = (
     appwriteClient: Appwrite,
-    options: { databaseId: string } = { databaseId: "default" },
+    options: DataProviderOptions = { databaseId: "default" },
 ): Required<DataProvider> => {
-    const { databaseId } = options;
+    const { databaseId, renameCol_$Id = 'id', resourceOptions = resourceOptionsDefault } = options;
 
     const database = new Databases(appwriteClient);
+
+    async function getOneUnique ({ resource, id }: Parameters<Required<DataProvider>['getOne']>[0], uniqueKeyAsPrimaryKey: string) {
+        const nid = Number(id)
+        if (isNaN(nid)) {
+            throw new Error(`Document from ${JSON.stringify(resource)} with col ${JSON.stringify(uniqueKeyAsPrimaryKey)} equals ${JSON.stringify(id)}: id is not a number`)
+        }
+        const { documents: [firstItem] } = await database.listDocuments(
+            databaseId,
+            resource,
+            [
+                Query.equal(uniqueKeyAsPrimaryKey, nid),
+                Query.limit(1),
+            ],
+        );
+
+        if (firstItem) {
+            const { $id, ...restData } = firstItem
+            return {
+                data: {
+                    [renameCol_$Id]: $id,
+                    ...restData,
+                },
+            } as any;
+        } else {
+            throw new Error(`Document from ${JSON.stringify(resource)} with col ${JSON.stringify(uniqueKeyAsPrimaryKey)} equals ${JSON.stringify(id)} not found`)
+        }
+    }
 
     return {
         getList: async ({
@@ -135,13 +174,17 @@ export const dataProvider = (
 
             return {
                 data: data.map(({ $id, ...restData }: { $id: string }) => ({
-                    id: $id,
+                    [renameCol_$Id]: $id,
                     ...restData,
                 })) as any,
                 total,
             };
         },
         getOne: async ({ resource, id }) => {
+            const { uniqueKeyAsPrimaryKey } = resourceOptions(resource)
+            if (uniqueKeyAsPrimaryKey) {
+                return getOneUnique({ resource, id }, uniqueKeyAsPrimaryKey)
+            }
             const { $id, ...restData } = await database.getDocument(
                 databaseId,
                 resource,
@@ -150,7 +193,7 @@ export const dataProvider = (
 
             return {
                 data: {
-                    id: $id,
+                    [renameCol_$Id]: $id,
                     ...restData,
                 },
             } as any;
@@ -172,7 +215,7 @@ export const dataProvider = (
 
             return {
                 data: {
-                    id: $id,
+                    [renameCol_$Id]: $id,
                     ...restData,
                 },
             } as any;
@@ -195,7 +238,7 @@ export const dataProvider = (
 
             return {
                 data: {
-                    id: $id,
+                    [renameCol_$Id]: $id,
                     ...restData,
                 },
             } as any;
@@ -221,7 +264,7 @@ export const dataProvider = (
 
             return {
                 data: data.map(({ $id, ...restData }) => ({
-                    id: $id,
+                    [renameCol_$Id]: $id,
                     ...restData,
                 })),
             } as any;
@@ -230,7 +273,7 @@ export const dataProvider = (
             await database.deleteDocument(databaseId, resource, id.toString());
 
             return {
-                data: { id },
+                data: { [renameCol_$Id]: id },
             } as any;
         },
         deleteMany: async ({ resource, ids }) => {
@@ -246,7 +289,7 @@ export const dataProvider = (
 
             return {
                 data: ids.map((id) => ({
-                    id,
+                    [renameCol_$Id]: id,
                 })),
             } as any;
         },
@@ -263,7 +306,7 @@ export const dataProvider = (
 
             return {
                 data: data.map(({ $id, ...restData }) => ({
-                    id: $id,
+                    [renameCol_$Id]: $id,
                     ...restData,
                 })),
             } as any;
@@ -289,7 +332,7 @@ export const dataProvider = (
 
             return {
                 data: data.map(({ $id, ...restData }) => ({
-                    id: $id,
+                    [renameCol_$Id]: $id,
                     ...restData,
                 })),
             } as any;
